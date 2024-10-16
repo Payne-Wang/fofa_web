@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>FOFA 查询工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: auto;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+        }
+        button:hover {
+            background-color: #45a049;
+            cursor: pointer;
+        }
+        #results {
+            margin-top: 20px;
+            white-space: pre-wrap;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            max-height: 400px;
+            overflow-y: scroll;
+            cursor: pointer;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>FOFA 查询工具</h2>
+        <label for="apiKey">密钥:</label>
+        <input type="text" id="apiKey" value="" required>
+
+        <label for="query">关键词:</label>
+        <input type="text" id="query" value='title="one api" && country="CN"' required>
+
+        <label for="field">field:</label>
+        <input type="text" id="field" value="link,country_name">
+
+        <label for="full">full:</label>
+        <input type="text" id="full" value="true">
+
+        <label for="size">size:</label>
+        <input type="number" id="size" value="100">
+
+        <label for="page">page:</label>
+        <input type="number" id="page" value="1" min="1">
+
+        <button id="searchBtn">查询</button>
+
+        <div id="results" title="点击复制内容"></div>
+    </div>
+
+    <script>
+        document.getElementById('searchBtn').addEventListener('click', function() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const query = document.getElementById('query').value.trim();
+            const field = document.getElementById('field').value.trim() || 'link,country_name';
+            const full = document.getElementById('full').value.trim().toLowerCase() === 'true' ? 'true' : 'false';
+            const size = parseInt(document.getElementById('size').value.trim()) || 100;
+            const page = parseInt(document.getElementById('page').value.trim()) || 1;
+
+            if (!apiKey || !query) {
+                alert('请填写密钥和关键词');
+                return;
+            }
+
+            // Base64 编码关键词
+            const encodedQuery = btoa(query);
+
+            const url = new URL("https://fofa.info/api/v1/search/all");
+            const params = {
+                key: apiKey,
+                qbase64: encodedQuery,
+                fields: field,
+                size: size,
+                full: full,
+                page: page
+            };
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+            // 显示加载中
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '查询中，请稍候...';
+
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`请求失败，状态码：${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(`API 错误：${data.error}`);
+                }
+                const results = data.results;
+                if (!results || results.length === 0) {
+                    resultsDiv.innerHTML = '未找到结果。';
+                    return;
+                }
+
+                let output = '';
+                results.forEach((item, index) => {
+                    // 假设每个item是一个数组，根据fields数量调整
+                    if (Array.isArray(item)) {
+                        // 仅显示第一个字段（link）
+                        output += `${index + 1}. ${item[0]}\n`;
+                    } else {
+                        output += `${index + 1}. ${item}\n`;
+                    }
+                });
+                resultsDiv.textContent = output;
+            })
+            .catch(error => {
+                resultsDiv.innerHTML = `<span class="error">${error.message}</span>`;
+            });
+        });
+
+        // 点击结果框复制内容
+        document.getElementById('results').addEventListener('click', function() {
+            const resultsText = this.textContent;
+            if (!resultsText) return;
+
+            // 分割每一行，去掉序号
+            const lines = resultsText.split('\n').filter(line => line.trim() !== '');
+            const urls = lines.map(line => {
+                const match = line.match(/^\d+\.\s+(.*)$/);
+                return match ? match[1] : line;
+            });
+            const textToCopy = urls.join('\n');
+
+            // 复制到剪贴板
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert('内容已复制到剪贴板！');
+            }).catch(err => {
+                alert('复制失败：', err);
+            });
+        });
+    </script>
+</body>
+</html>
